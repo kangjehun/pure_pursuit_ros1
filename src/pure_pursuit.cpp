@@ -1,8 +1,8 @@
 /*
- * Vehicle Pure Pursuit Controller : 
+ * Pure Pursuit Controller
  * Author: KangJehun 20170016 wpgnssla34@kaist.ac.kr
- * Last Edit : 2024.02.16
- * Implementation of pure-pursuit steering controller
+ * Last Edit : 2024.03.23
+ * Implementation of pure-pursuit steering controller with bicycle model
  */
 
 // Basic Libraries
@@ -86,6 +86,7 @@ private:
     visualization_msgs::Marker waypoint_marker_;
     visualization_msgs::Marker control_signal_marker_;
     // Parameters 
+    bool verbose_;              // Show debugging messages
     bool realtime_waypoint_;    // Update waypoints in real time (if true)
     float lookahead_;           // Lookahead distance
     float wheelbase_length_;    // Wheel-base length of vehicle
@@ -143,7 +144,7 @@ VehicleController::VehicleController(ros::NodeHandle &nh, ros::NodeHandle &pnh, 
     nh_(nh), pnh_(pnh), frequency_(frequency), speed_pid_controller_(1.0, 0.0, 0.0, 1.0 / frequency)
 {
     cout << "Pure Pursuit Node is Launched" << endl;
-    // Set parameters
+    // Set Parameters
     init_params();
     // Set Member Varibles
     theta_rear2goal_ = 0;
@@ -219,6 +220,7 @@ VehicleController::~VehicleController(){}
  */
 void VehicleController::init_params()
 {
+    pnh_.param("verbose", verbose_, true);
     pnh_.param("realtime_waypoint", realtime_waypoint_, true);
     pnh_.param("lookahead_distance", lookahead_, float(0));
     pnh_.param("wheelbase_length", wheelbase_length_, float(0.475));
@@ -237,18 +239,21 @@ void VehicleController::init_params()
     min_steering_ = utils_basic::deg2rad(min_steering_);
     
     // [DEBUG]
-    ROS_INFO("Parameter Setting");
-    ROS_INFO(realtime_waypoint_ ? "realtime_waypoint : true" : "realtime_waypoint : false");
-    ROS_INFO("lookahead : %f", lookahead_);
-    ROS_INFO("wheelbase_length : %f", wheelbase_length_);
-    ROS_INFO("max_velocity : %f", max_velocity_); // [mps]
-    ROS_INFO("min_velocity : %f", min_velocity_); // [mps]
-    ROS_INFO("max_steering : %f", max_steering_); // [rad]
-    ROS_INFO("min_steering : %f", min_steering_); // [rad]
-    ROS_INFO("speed PID controller kp : %f", speed_pid_controller_.kp);
-    ROS_INFO("speed PID controller ki : %f", speed_pid_controller_.ki);
-    ROS_INFO("speed PID controller kd : %f", speed_pid_controller_.kd);
-    ROS_INFO("odometry_topic : %s", odometry_topic_.c_str());
+    if(verbose_)
+    {
+        ROS_INFO("Parameter Setting");
+        ROS_INFO(realtime_waypoint_ ? "realtime_waypoint : true" : "realtime_waypoint : false");
+        ROS_INFO("lookahead : %f", lookahead_);
+        ROS_INFO("wheelbase_length : %f", wheelbase_length_);
+        ROS_INFO("max_velocity : %f", max_velocity_); // [mps]
+        ROS_INFO("min_velocity : %f", min_velocity_); // [mps]
+        ROS_INFO("max_steering : %f", max_steering_); // [rad]
+        ROS_INFO("min_steering : %f", min_steering_); // [rad]
+        ROS_INFO("speed PID controller kp : %f", speed_pid_controller_.kp);
+        ROS_INFO("speed PID controller ki : %f", speed_pid_controller_.ki);
+        ROS_INFO("speed PID controller kd : %f", speed_pid_controller_.kd);
+        ROS_INFO("odometry_topic : %s", odometry_topic_.c_str());   
+    }
 }
 
 float VehicleController::find_distance(float x, float y)
