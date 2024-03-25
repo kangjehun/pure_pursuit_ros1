@@ -25,8 +25,12 @@
 #include "velocity_profile_srvs/GetVelocityProfile.h"
 // Visualization
 #include <visualization_msgs/Marker.h>
+// TF
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 // Other Libraries
 #include "utils_basic/utils_basic.h"
+
 
 
 using namespace std;
@@ -85,6 +89,9 @@ private:
     geometry_msgs::Twist cmd_vel_msg_;
     visualization_msgs::Marker waypoint_marker_;
     visualization_msgs::Marker control_signal_marker_;
+    // TF
+    tf2_ros::Buffer tfBuffer_;
+    tf2_ros::TransformListener tfListener_;
     // Parameters 
     bool verbose_;              // Show debugging messages
     bool realtime_waypoint_;    // Update waypoints in real time (if true)
@@ -100,6 +107,8 @@ private:
     float alpha_;           // theta_rear2goal - heading
     bool vehicle_state_is_updated_;
     int vehicle_state_update_count_;
+    bool tf_is_updated_;
+    int tf_update_count_;
     bool realtime_waypoint_is_updated_;
     bool realtime_velocityprofile_is_updated_;
     float x_ego_;
@@ -136,12 +145,14 @@ private:
 public:
     VehicleController(ros::NodeHandle &nh, ros::NodeHandle &pnh, float frequency);
     ~VehicleController();
+    void update_vehicle_state();
     void purepursuit();
 };
 
 // Constructer
 VehicleController::VehicleController(ros::NodeHandle &nh, ros::NodeHandle &pnh, float frequency):
-    nh_(nh), pnh_(pnh), frequency_(frequency), speed_pid_controller_(1.0, 0.0, 0.0, 1.0 / frequency)
+    nh_(nh), pnh_(pnh), frequency_(frequency), speed_pid_controller_(1.0, 0.0, 0.0, 1.0 / frequency),
+    tfListener_(tfBuffer_)
 {
     cout << "Pure Pursuit Node is Launched" << endl;
     // Set Parameters
@@ -153,6 +164,8 @@ VehicleController::VehicleController(ros::NodeHandle &nh, ros::NodeHandle &pnh, 
     // waypoint_is_updated = false;
     vehicle_state_is_updated_ = false;
     vehicle_state_update_count_ = 0;
+    tf_is_updated_ = false;
+    tf_update_count_ = 0;
     realtime_waypoint_is_updated_ = false;
     realtime_velocityprofile_is_updated_ = false;
     x_ego_ = 0;
@@ -334,6 +347,46 @@ void VehicleController::update_alpha()
 
 
 /*
+    Update vehicle state with tf data
+*/
+void VehicleController::update_vehicle_state()
+{
+    geometry_msgs::TransformStamped transformStamped;
+    try
+    {
+        transformStamped = tfBuffer_.lookupTransform("odom", "base_link", ros::Time(0));
+        // Position
+        x_ego_ = transformStamped.transform.translation.x;
+        y_ego_ = transformStamped.transform.translation.y;
+        z_ego_ = transformStamped.transform.translation.z;
+
+        // Orientation
+        tf2::Quaternion q(
+            transformStamped.transform.rotation.x,
+            transformStamped.transform.rotation.y,
+            transformStamped.transform.rotation.z,
+            transformStamped.transform.rotation.w
+        );
+        double roll, pitch, yaw;
+        tf2::Matrix3x3 m(q);
+        m.getRPY(roll, pitch, yaw);
+        yaw_ego_ = yaw;
+
+        if (!tf_is_updated_)
+        {
+            tf_is_updated_ = true;
+        }
+        tf_update_count_++;
+    }
+    catch (tf2::TransformException &ex)
+    {
+        ROS_WARN("%s",ex.what());
+        ros::Duration(1.0).sleep();
+        return;
+    }
+}
+
+/*
     Implementation of vehicle state callback
 */
 void VehicleController::callback_vehiclestate(const nav_msgs::Odometry::ConstPtr &msg)
@@ -416,6 +469,12 @@ void VehicleController::purepursuit()
     {
         // [DEBUG]
         ROS_INFO_THROTTLE(1.0, "vehicle state is not updated yet");
+        return;
+    }
+    if(!tf_is_updated_)
+    {
+        // [DEBUG]
+        ROS_INFO_THROTTLE(1.0, "tf is not updated yet");
         return;
     }
     if(realtime_waypoint_)
@@ -555,6 +614,7 @@ int main(int argc, char **argv)
         start_time = chrono::steady_clock::now();
         /////////////////////////////////////////////////////////////////////////////////////////
 
+        vehicle_controller.update_vehicle_state();
         vehicle_controller.purepursuit();
         ros::spinOnce();
         loop_rate.sleep();

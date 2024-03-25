@@ -3,13 +3,13 @@
         <param name="realtime_waypoint" value="true"/> 
         <param name="lookahead_distance" value="5"/> 
         <param name="wheelbase_length" value="0.475"/>
-        <param name="velocity_min" value="-9"/> <!-- kph -->
-        <param name="velocity_max" value="9"/> <!-- kph -->
+        <param name="velocity_min" value="-6"/> <!-- kph -->
+        <param name="velocity_max" value="6"/> <!-- kph -->
         <param name="steering_min" value="-30"/> <!-- deg -->
         <param name="steering_max" value="30"/> <!-- deg -->
         <param name="kp" value="1"/>
         <param name="ki" value="0.0"/>
-        <param name="kd" value="1"/>
+        <param name="kd" value="0"/>
         <param name="odometry_topic" value="/Odometry/base"/>  
     </node>
 </launch>
