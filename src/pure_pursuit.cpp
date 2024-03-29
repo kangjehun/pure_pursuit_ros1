@@ -93,18 +93,22 @@ private:
     tf2_ros::Buffer tfBuffer_;
     tf2_ros::TransformListener tfListener_;
     // Parameters 
-    bool verbose_;              // Show debugging messages
-    bool realtime_waypoint_;    // Update waypoints in real time (if true)
-    float lookahead_;           // Lookahead distance
-    float wheelbase_length_;    // Wheel-base length of vehicle
-    float min_velocity_;        // Minimum velocity of vehicle [mps]
-    float max_velocity_;        // Maximum velocity of vehicle [mps]
-    float min_steering_;        // Minimum steering angle of vehicle `[rad]
-    float max_steering_;        // Maximum steering angle of vehicle [rad]
+    bool verbose_;                              // Show debugging messages
+    bool realtime_waypoint_;                    // Update waypoints in real time (if true)
+    float lookahead_;                           // Lookahead distance
+    float wheelbase_length_;                    // Wheel-base length of vehicle
+    float min_velocity_;                        // Minimum velocity of vehicle [mps]
+    float max_velocity_;                        // Maximum velocity of vehicle [mps]
+    float min_steering_;                        // Minimum steering angle of vehicle [rad]
+    float max_steering_;                        // Maximum steering angle of vehicle [rad]
+    float min_velocity_clipping_;                // Minimum velocity of vehicle [mps]
+    float max_velocity_clipping_;                // Maximum velocity of vehicle [mps]
+    float min_steering_clipping_;                // Minimum steering angle of vehicle [rad]
+    float max_steering_clipping_;                // Maximum steering angle of vehicle [rad]
     // Member variables
-    float theta_rear2goal_; // global heading angle of rear to goal vector
-    float heading_;         // global heading angle of the vehicle
-    float alpha_;           // theta_rear2goal - heading
+    float theta_rear2goal_;                     // global heading angle of rear to goal vector
+    float heading_;                             // global heading angle of the vehicle
+    float alpha_;                               // theta_rear2goal - heading
     bool vehicle_state_is_updated_;
     int vehicle_state_update_count_;
     bool tf_is_updated_;
@@ -240,16 +244,24 @@ void VehicleController::init_params()
     pnh_.param("kp", speed_pid_controller_.kp, 1.);
     pnh_.param("ki", speed_pid_controller_.ki, 0.);
     pnh_.param("kd", speed_pid_controller_.kd, 0.);
-    pnh_.param("velocity_min", min_velocity_, float(-90));
-    pnh_.param("velocity_max", max_velocity_, float(90));
-    pnh_.param("steering_min", min_steering_, float(-30));
-    pnh_.param("steering_max", max_steering_, float(30));
+    pnh_.param("velocity_min", min_velocity_, float(-60));
+    pnh_.param("velocity_max", max_velocity_, float(60));
+    pnh_.param("steering_min", min_steering_, float(-25));
+    pnh_.param("steering_max", max_steering_, float(25));
+    pnh_.param("velocity_min_clipping", min_velocity_clipping_, float(-12));
+    pnh_.param("velocity_max_clipping", max_velocity_clipping_, float(12));
+    pnh_.param("steering_min_clipping", min_steering_clipping_, float(-25));
+    pnh_.param("steering_max_clipping", max_steering_clipping_, float(25));
     pnh_.param("odometry_topic", odometry_topic_, string("/Odometry/base"));
 
     max_velocity_ = utils_basic::kph2mps(max_velocity_);
     min_velocity_ = utils_basic::kph2mps(min_velocity_);
     max_steering_ = utils_basic::deg2rad(max_steering_);
     min_steering_ = utils_basic::deg2rad(min_steering_);
+    max_velocity_clipping_ = utils_basic::kph2mps(max_velocity_clipping_);
+    min_velocity_clipping_ = utils_basic::kph2mps(min_velocity_clipping_);
+    max_steering_clipping_ = utils_basic::deg2rad(max_steering_clipping_);
+    min_steering_clipping_ = utils_basic::deg2rad(min_steering_clipping_);
     
     // [DEBUG]
     if(verbose_)
@@ -258,10 +270,14 @@ void VehicleController::init_params()
         ROS_INFO(realtime_waypoint_ ? "realtime_waypoint : true" : "realtime_waypoint : false");
         ROS_INFO("lookahead : %f", lookahead_);
         ROS_INFO("wheelbase_length : %f", wheelbase_length_);
-        ROS_INFO("max_velocity : %f", max_velocity_); // [mps]
-        ROS_INFO("min_velocity : %f", min_velocity_); // [mps]
-        ROS_INFO("max_steering : %f", max_steering_); // [rad]
-        ROS_INFO("min_steering : %f", min_steering_); // [rad]
+        ROS_INFO("max_velocity [m/s]: %f", max_velocity_); // [mps]
+        ROS_INFO("min_velocity [m/s]: %f", min_velocity_); // [mps]
+        ROS_INFO("max_steering [rad]: %f", max_steering_); // [rad]
+        ROS_INFO("min_steering [rad]: %f", min_steering_); // [rad]
+        ROS_INFO("max_velocity_clipping [m/s]: %f", max_velocity_clipping_); // [mps]
+        ROS_INFO("min_velocity_clipping [m/s]: %f", min_velocity_clipping_); // [mps]
+        ROS_INFO("max_steering_clipping [rad]: %f", max_steering_clipping_); // [rad]
+        ROS_INFO("min_steering_clipping [rad]: %f", min_steering_clipping_); // [rad]
         ROS_INFO("speed PID controller kp : %f", speed_pid_controller_.kp);
         ROS_INFO("speed PID controller ki : %f", speed_pid_controller_.ki);
         ROS_INFO("speed PID controller kd : %f", speed_pid_controller_.kd);
@@ -398,33 +414,34 @@ void VehicleController::callback_vehiclestate(const nav_msgs::Odometry::ConstPtr
     vehicle_state_update_count_++;
 
     // Position
-    float x = msg->pose.pose.position.x;
-    float y = msg->pose.pose.position.y;
-    float z = msg->pose.pose.position.z;
+    // float x = msg->pose.pose.position.x;
+    // float y = msg->pose.pose.position.y;
+    // float z = msg->pose.pose.position.z;
 
     // Orientation
-    geometry_msgs::Quaternion quat = msg->pose.pose.orientation;
-    float qx = msg->pose.pose.orientation.x;
-    float qy = msg->pose.pose.orientation.y;
-    float qz = msg->pose.pose.orientation.z;
-    float qw = msg->pose.pose.orientation.w;
+    // geometry_msgs::Quaternion quat = msg->pose.pose.orientation;
+    // float qx = msg->pose.pose.orientation.x;
+    // float qy = msg->pose.pose.orientation.y;
+    // float qz = msg->pose.pose.orientation.z;
+    // float qw = msg->pose.pose.orientation.w;
 
     // Linear velocity
     float vx = msg->twist.twist.linear.x;
-    float vy = msg->twist.twist.linear.y;
-    float vz = msg->twist.twist.linear.z;
-
-    vector<float> vect_v = {vx, vy, vz};
-    float v = utils_basic::normalizeVect(vect_v);
+    // float vy = msg->twist.twist.linear.y;
+    // float vz = msg->twist.twist.linear.z;
+    
+    // Vehicle Speed
+    // vector<float> vect_v = {vx, vy, vz};
+    // float v = utils_basic::normalizeVect(vect_v);
 
     // Angular velocity
-    float wx = msg->twist.twist.linear.x;
-    float wy = msg->twist.twist.linear.y;
-    float wz = msg->twist.twist.linear.z;
+    // float wx = msg->twist.twist.linear.x;
+    // float wy = msg->twist.twist.linear.y;
+    // float wz = msg->twist.twist.linear.z;
 
     // Euler from Quaternion
-    double roll, pitch, yaw;
-    utils_basic::quaternionToEuler(quat, roll, pitch, yaw);
+    // double roll, pitch, yaw;
+    // utils_basic::quaternionToEuler(quat, roll, pitch, yaw);
 
     // [DEBUG]
     // ROS_INFO_THROTTLE(1.0, "Vehicle State is updated %d times", vehicle_state_update_count_);
@@ -438,12 +455,12 @@ void VehicleController::callback_vehiclestate(const nav_msgs::Odometry::ConstPtr
     // ROS_INFO_THROTTLE(1.0, "\n");
 
     // Update member variable
-    x_ego_ = x;
-    y_ego_ = y;
-    z_ego_ = z;
-    yaw_ego_ = yaw;
+    // x_ego_ = x;
+    // y_ego_ = y;
+    // z_ego_ = z;
+    // yaw_ego_ = yaw;
     vx_ego_ = vx;
-    wz_ego_ = wz;
+    // wz_ego_ = wz;
 }
 
 void VehicleController::callback_waypoints(const nav_msgs::Path::ConstPtr &msg)
@@ -507,27 +524,29 @@ void VehicleController::purepursuit()
         utils_basic::normalizeAngle(atan2((2. * wheelbase_length_ * sin(alpha_)), lookahead_));
 
     // [DEBUG]
-    // ROS_INFO_THROTTLE(1.0, "v_desired                     : %f", v_desired);
-    // ROS_INFO_THROTTLE(1.0, "nearest index                 : %d", nearest_idx_);
-    // ROS_INFO_THROTTLE(1.0, "lookahead index               : %d", lookahead_idx_);
-    // ROS_INFO_THROTTLE(1.0, 
-    //     "control signal (d)     [kph]  : %f", utils_basic::mps2kph(control_signal_d_));
-    // ROS_INFO_THROTTLE(1.0, 
-    //     "control signal (theta) [deg]  : %f", utils_basic::rad2deg(control_signal_theta_));
+    ROS_INFO_THROTTLE(1.0, "v_desired                     : %f", v_desired);
+    ROS_INFO_THROTTLE(1.0, "nearest index                 : %d", nearest_idx_);
+    ROS_INFO_THROTTLE(1.0, "lookahead index               : %d", lookahead_idx_);
+    ROS_INFO_THROTTLE(1.0, "Before clipping");
+    ROS_INFO_THROTTLE(1.0, 
+        "control signal (d)     [kph]  : %f", utils_basic::mps2kph(control_signal_d_));
+    ROS_INFO_THROTTLE(1.0, 
+        "control signal (theta) [deg]  : %f", utils_basic::rad2deg(control_signal_theta_));
+
     visualize_waypoint_with_idx(nearest_idx_, 0, 1.0, 0.0, 0.0);
     visualize_waypoint_with_idx(lookahead_idx_, 1, 0.0, 0.0, 1.0);
     visualize_control_signal(0, 1.0, 1.0, 0.0);
 
     // Clipping
-    control_signal_d_ = max(min_velocity_, min(control_signal_d_, max_velocity_));
-    control_signal_theta_ = max(min_steering_, min(control_signal_theta_, max_steering_));
+    control_signal_d_ = max(min_velocity_clipping_, min(control_signal_d_, max_velocity_clipping_));
+    control_signal_theta_ = max(min_steering_clipping_, min(control_signal_theta_, max_steering_clipping_));
 
     // [DEBUG]
-    // ROS_INFO_THROTTLE(1.0, "After clipping");
-    // ROS_INFO_THROTTLE(1.0, 
-    //     "control signal (d)     [kph]  : %f", utils_basic::mps2kph(control_signal_d_));
-    // ROS_INFO_THROTTLE(1.0, 
-    //     "control signal (theta) [deg]  : %f", utils_basic::rad2deg(control_signal_theta_));
+    ROS_INFO_THROTTLE(1.0, "After clipping");
+    ROS_INFO_THROTTLE(1.0, 
+        "control signal (d)     [kph]  : %f", utils_basic::mps2kph(control_signal_d_));
+    ROS_INFO_THROTTLE(1.0, 
+        "control signal (theta) [deg]  : %f", utils_basic::rad2deg(control_signal_theta_));
 
     // Remapping
     control_signal_d_ = 
@@ -536,9 +555,9 @@ void VehicleController::purepursuit()
         utils_basic::normalizeControlSignal(control_signal_theta_, min_steering_, max_steering_, -1, 1);
 
     // [DEBUG]
-    // ROS_INFO_THROTTLE(1.0, "After remapping");
-    // ROS_INFO_THROTTLE(1.0, "control signal (d)     [-1, 1]  : %f", control_signal_d_);
-    // ROS_INFO_THROTTLE(1.0, "control signal (theta) [-1, 1]  : %f", control_signal_theta_);
+    ROS_INFO_THROTTLE(1.0, "After remapping");
+    ROS_INFO_THROTTLE(1.0, "control signal (d)     [-1, 1]  : %f", control_signal_d_);
+    ROS_INFO_THROTTLE(1.0, "control signal (theta) [-1, 1]  : %f", control_signal_theta_);
 
     // Publish the message
     cmd_vel_msg_.linear.x = control_signal_d_;

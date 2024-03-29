@@ -1,15 +1,22 @@
 <launch>
+    <arg name="use_sim_time" default="false"/>
+    <param name="/use_sim_time" value="$(arg use_sim_time)" />
+
     <node name="pure_pursuit" pkg="pure_pursuit" type="pure_pursuit" output="screen">
         <param name="realtime_waypoint" value="true"/> 
-        <param name="lookahead_distance" value="5"/> 
+        <param name="lookahead_distance" value="2.5"/> 
         <param name="wheelbase_length" value="0.475"/>
-        <param name="velocity_min" value="-6"/> <!-- kph -->
-        <param name="velocity_max" value="6"/> <!-- kph -->
-        <param name="steering_min" value="-30"/> <!-- deg -->
-        <param name="steering_max" value="30"/> <!-- deg -->
-        <param name="kp" value="1"/>
+        <param name="velocity_min" value="-42"/> <!-- kph -->
+        <param name="velocity_max" value="42"/> <!-- kph -->
+        <param name="steering_min" value="-20"/> <!-- deg -->
+        <param name="steering_max" value="20"/> <!-- deg -->
+        <param name="velocity_min_clipping" value="-42"/> <!-- kph -->
+        <param name="velocity_max_clipping" value="42"/> <!-- kph -->
+        <param name="steering_min_clipping" value="-20"/> <!-- deg -->
+        <param name="steering_max_clipping" value="20"/> <!-- deg -->
+        <param name="kp" value="10.0"/>
         <param name="ki" value="0.0"/>
-        <param name="kd" value="0"/>
-        <param name="odometry_topic" value="/Odometry/base"/>  
+        <param name="kd" value="50.0"/>
+        <param name="odometry_topic" value="/Odometry/base"/>
     </node>
 </launch>
